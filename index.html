@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Consent Mode v2 Diagnostic Validator & Fix Engine</title>
+  <meta name="description" content="Free online auditor for Google Consent Mode v2. Detect race conditions, missing ad_user_data/ad_personalization parameters, and Google Ads compliance errors.">
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --pass: #16a34a;
+      --pass-bg: #f0fdf4;
+      --fail: #dc2626;
+      --fail-bg: #fef2f2;
+      --warn: #d97706;
+      --warn-bg: #fffbeb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #090d16;
+        --card-bg: #0f172a;
+        --text: #f8fafc;
+        --text-muted: #94a3b8;
+        --border: #1e293b;
+        --pass-bg: #052e16;
+        --fail-bg: #450a0a;
+        --warn-bg: #451a03;
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 32px 16px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(37, 99, 235, 0.1);
+      color: var(--primary);
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+    p.subtitle {
+      font-size: 17px;
+      color: var(--text-muted);
+      max-width: 650px;
+      margin: 0 auto;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 15px;
+    }
+    textarea {
+      width: 100%;
+      height: 180px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      resize: vertical;
+      margin-bottom: 12px;
+    }
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    button {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary {
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--border); }
+    .results {
+      display: none;
+      margin-top: 24px;
+    }
+    .status-banner {
+      padding: 16px 20px;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .status-pass {
+      background: var(--pass-bg);
+      color: var(--pass);
+      border: 1px solid var(--pass);
+    }
+    .status-fail {
+      background: var(--fail-bg);
+      color: var(--fail);
+      border: 1px solid var(--fail);
+    }
+    .item-card {
+      padding: 14px 18px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+    .item-pass {
+      background: var(--pass-bg);
+      border-left: 4px solid var(--pass);
+    }
+    .item-fail {
+      background: var(--fail-bg);
+      border-left: 4px solid var(--fail);
+    }
+    .item-warn {
+      background: var(--warn-bg);
+      border-left: 4px solid var(--warn);
+    }
+    .solution-box {
+      background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+      color: #fff;
+      padding: 28px;
+      border-radius: 14px;
+      text-align: center;
+      margin-top: 32px;
+    }
+    .solution-box h2 {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+    .solution-box p {
+      font-size: 15px;
+      opacity: 0.95;
+      max-width: 600px;
+      margin: 0 auto 20px;
+    }
+    .cta-btn {
+      display: inline-block;
+      background: #ffffff;
+      color: #1e3a8a;
+      font-weight: 700;
+      font-size: 16px;
+      padding: 12px 28px;
+      border-radius: 8px;
+      text-decoration: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .cta-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+    }
+    footer {
+      text-align: center;
+      margin-top: 48px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    footer a { color: var(--primary); text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="badge">Google Compliance Inspector 2026</div>
+    <h1>Google Consent Mode v2 Validator</h1>
+    <p class="subtitle">Detect missing mandatory parameters, race condition script loading, and Google Ads attribution drop-offs before your campaigns get limited.</p>
+  </header>
+
+  <div class="card">
+    <label for="code-input">Paste your website's &lt;head&gt; code or consent scripts:</label>
+    <textarea id="code-input" placeholder="<!-- Paste your GTM / gtag snippets and CMP script here -->
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('consent', 'default', {
+    'ad_storage': 'denied',
+    'analytics_storage': 'denied'
+  });
+</script>
+<script src='https://www.googletagmanager.com/gtm.js?id=GTM-XXXX'></script>"></textarea>
+
+    <div class="btn-row">
+      <button class="btn-primary" onclick="runAudit()">Audit Implementation</button>
+      <button class="btn-secondary" onclick="loadFailingSample()">Load Broken Sample</button>
+      <button class="btn-secondary" onclick="loadPassingSample()">Load Passing Sample</button>
+    </div>
+
+    <div id="results" class="results">
+      <div id="status-banner" class="status-banner"></div>
+      <div id="items-list"></div>
+    </div>
+  </div>
+
+  <div class="solution-box">
+    <h2>Fix All Consent Mode Errors in 3 Minutes</h2>
+    <p>Tired of paying $15–$50/month for bloated cookie banners that break your PageSpeed score? <strong>ConsentModePro</strong> gives you a drop-in, zero-dependency (&lt;4KB) synchronous guard for Shopify, WordPress, Next.js, and static sites for a single $19 payment.</p>
+    <a href="https://whop.com/checkout/plan_bCPln1DjqcSxp" class="cta-btn" target="_blank" rel="noopener">Get ConsentModePro ($19 One-Time) &rarr;</a>
+    <div style="font-size: 12px; margin-top: 10px; opacity: 0.85;">Instant digital delivery &bull; Zero monthly subscriptions &bull; 100% Google v2 Compliant</div>
+  </div>
+
+  <footer>
+    <p>Open-source diagnostic engine available on <a href="https://github.com/A7mdMe/consent-mode-v2-guard" target="_blank">GitHub</a>. Maintained by Antigravity Autonomous Systems.</p>
+  </footer>
+</div>
+
+<script>
+const V2_PARAMS = ['ad_storage', 'analytics_storage', 'ad_user_data', 'ad_personalization'];
+
+function loadFailingSample() {
+  document.getElementById('code-input').value = `<!-- Common Broken Setup: GTM loads before CMP sets default -->
+<script src="https://www.googletagmanager.com/gtm.js?id=GTM-SAMPLE"><\/script>
+
+<!-- CMP initializes v1 parameters only (missing v2) -->
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('consent', 'default', {
+    'ad_storage': 'denied',
+    'analytics_storage': 'denied'
+  });
+<\/script>`;
+  runAudit();
+}
+
+function loadPassingSample() {
+  document.getElementById('code-input').value = `<!-- Compliant ConsentModePro Setup -->
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  window.gtag = window.gtag || gtag;
+
+  gtag('consent', 'default', {
+    'ad_storage': 'denied',
+    'analytics_storage': 'denied',
+    'ad_user_data': 'denied',
+    'ad_personalization': 'denied',
+    'wait_for_update': 500
+  });
+<\/script>
+
+<!-- GTM loads strictly AFTER default consent state is established -->
+<script src="https://www.googletagmanager.com/gtm.js?id=GTM-SAMPLE"><\/script>
+<script src="/consent-mode-guard.js" defer><\/script>`;
+  runAudit();
+}
+
+function runAudit() {
+  const html = document.getElementById('code-input').value;
+  const resultsDiv = document.getElementById('results');
+  const bannerDiv = document.getElementById('status-banner');
+  const listDiv = document.getElementById('items-list');
+
+  resultsDiv.style.display = 'block';
+  listDiv.innerHTML = '';
+
+  const issues = [];
+  const passes = [];
+  const warnings = [];
+
+  // Check 1: consent default call
+  const hasConsentDefault = /gtag\s*\(\s*['"]consent['"]\s*,\s*['"]default['"]/i.test(html);
+  if (!hasConsentDefault) {
+    issues.push({
+      title: 'Missing gtag("consent", "default") declaration',
+      desc: 'CRITICAL: Google Ads and GA4 cannot detect an initial consent state. Conversion modeling and audience retention will be disabled.'
+    });
+  } else {
+    passes.push('Consent default call detected: gtag("consent", "default", {...})');
+  }
+
+  // Check 2: 4 mandatory v2 parameters
+  const missing = [];
+  for (const p of V2_PARAMS) {
+    const reg = new RegExp(`['"]?${p}['"]?\\s*:`, 'i');
+    if (!reg.test(html)) missing.push(p);
+  }
+
+  if (missing.length > 0) {
+    issues.push({
+      title: 'Missing Mandatory Consent Mode v2 Parameters: ' + missing.join(', '),
+      desc: 'CRITICAL: Google Consent Mode v2 strictly requires ad_user_data and ad_personalization in the default command. Without them, Google Ads flags the site as non-compliant.'
+    });
+  } else {
+    passes.push('All 4 mandatory parameters present (ad_storage, analytics_storage, ad_user_data, ad_personalization)');
+  }
+
+  // Check 3: Race condition
+  const consentIdx = html.search(/gtag\s*\(\s*['"]consent['"]\s*,\s*['"]default['"]/i);
+  const gtmIdx = html.search(/(googletagmanager\.com\/gtm\.js|googletagmanager\.com\/gtag\/js)/i);
+  if (consentIdx !== -1 && gtmIdx !== -1) {
+    if (gtmIdx < consentIdx) {
+      issues.push({
+        title: 'Race Condition Detected: Google Tag loads BEFORE consent default',
+        desc: 'HIGH: The Google Tag fires its initial collect ping before reading your default consent state, sending an uninitialized "gcd" parameter.'
+      });
+    } else {
+      passes.push('Execution Order Verified: Consent default executes before Google Tag loads');
+    }
+  }
+
+  // Check 4: wait_for_update
+  if (/['"]?wait_for_update['"]?\s*:\s*\d+/i.test(html)) {
+    passes.push('wait_for_update parameter configured');
+  } else if (hasConsentDefault) {
+    warnings.push({
+      title: 'wait_for_update is not configured',
+      desc: 'Recommendation: Adding "wait_for_update: 500" allows the CMP 500ms to resolve prior user consent without delaying critical tags.'
+    });
+  }
+
+  // Render Status
+  if (issues.length === 0) {
+    bannerDiv.className = 'status-banner status-pass';
+    bannerDiv.innerHTML = '&#10004; COMPLIANT: Your code meets Google Consent Mode v2 requirements.';
+  } else {
+    bannerDiv.className = 'status-banner status-fail';
+    bannerDiv.innerHTML = '&#10008; NON-COMPLIANT: ' + issues.length + ' critical issue(s) detected that affect Google Ads attribution.';
+  }
+
+  issues.forEach(i => {
+    listDiv.innerHTML += `<div class="item-card item-fail"><strong>&#10008; [FAIL] ${i.title}</strong><div style="font-size:13px; margin-top:4px; opacity:0.9;">${i.desc}</div></div>`;
+  });
+
+  passes.forEach(p => {
+    listDiv.innerHTML += `<div class="item-card item-pass"><strong>&#10004; [PASS]</strong> ${p}</div>`;
+  });
+
+  warnings.forEach(w => {
+    listDiv.innerHTML += `<div class="item-card item-warn"><strong>&#9888; [RECOMMENDATION] ${w.title}</strong><div style="font-size:13px; margin-top:4px; opacity:0.9;">${w.desc}</div></div>`;
+  });
+}
+</script>
+
+</body>
+</html>
