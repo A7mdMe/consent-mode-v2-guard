@@ -1,0 +1,46 @@
+<!-- 
+  ConsentModePro — Standard HTML / Webflow / Framer / Custom Web Drop-in
+  Place this snippet at the VERY TOP of your <head> section, BEFORE any Google Tag Manager (GTM) or gtag.js script.
+-->
+
+<!-- 1. Synchronous Head-Guard -->
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  window.gtag = window.gtag || gtag;
+
+  (function(){
+    var STORAGE_KEY = 'cmp_v2_consent';
+    var saved = null;
+    try {
+      var item = localStorage.getItem(STORAGE_KEY);
+      if (item) {
+        var parsed = JSON.parse(item);
+        if (parsed && (Date.now() - parsed.timestamp < 365 * 86400000)) {
+          saved = parsed.settings;
+        }
+      }
+    } catch(e) {}
+
+    if (saved) {
+      gtag('consent', 'default', {
+        'ad_storage': saved.ad_storage,
+        'analytics_storage': saved.analytics_storage,
+        'ad_user_data': saved.ad_user_data,
+        'ad_personalization': saved.ad_personalization,
+        'wait_for_update': 500
+      });
+    } else {
+      gtag('consent', 'default', {
+        'ad_storage': 'denied',
+        'analytics_storage': 'denied',
+        'ad_user_data': 'denied',
+        'ad_personalization': 'denied',
+        'wait_for_update': 500
+      });
+    }
+  })();
+</script>
+
+<!-- 2. Banner UI & Update Engine (Replace path with your hosted or CDN file) -->
+<script src="/consent-mode-guard.js" defer></script>
