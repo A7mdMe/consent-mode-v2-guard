@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * ConsentModePro — Automated Diagnostic CLI Validator
+ * Google Consent Mode v2 — Static Syntax Scanner CLI
  * 
- * Usage:
- *   node consent-validator.mjs https://example.com
- *   node consent-validator.mjs --file ./index.html
+ * Open Source Developer Utility
+ * License: MIT
  */
 
 import fs from 'fs';
@@ -37,20 +36,17 @@ export function analyzeHtml(html) {
   const passes = [];
   const warnings = [];
 
-  // 1. Check for gtag consent default
   const hasConsentDefault = /gtag\s*\(\s*['"]consent['"]\s*,\s*['"]default['"]/i.test(html);
   if (!hasConsentDefault) {
     issues.push({
       code: 'ERR_NO_CONSENT_DEFAULT',
-      title: 'Missing gtag("consent", "default") declaration',
-      impact: 'CRITICAL: Google Ads and GA4 will not detect consent state, dropping conversion modeling and audience retention.',
-      fix: 'Add the synchronous head-guard before any analytics tag.'
+      title: 'Missing gtag("consent", "default") declaration in static source',
+      detail: 'The string gtag("consent", "default", ...) was not found in the inspected HTML.'
     });
   } else {
-    passes.push('Consent default call detected: gtag("consent", "default", {...})');
+    passes.push('Consent default call detected in source text');
   }
 
-  // 2. Check for all 4 v2 mandatory parameters
   const missingParams = [];
   for (const p of V2_PARAMS) {
     const paramRegex = new RegExp(`['"]?${p}['"]?\\s*:`, 'i');
@@ -62,57 +58,30 @@ export function analyzeHtml(html) {
   if (missingParams.length > 0) {
     issues.push({
       code: 'ERR_MISSING_V2_PARAMS',
-      title: `Missing Mandatory Consent Mode v2 Parameters: ${missingParams.join(', ')}`,
-      impact: 'CRITICAL: Google Consent Mode v2 strictly requires ad_user_data and ad_personalization. Without them, Google Ads flags the site as non-compliant in EEA/UK.',
-      fix: `Ensure all 4 parameters are set in the default state: ${V2_PARAMS.join(', ')}`
+      title: `Missing parameter keys in text: ${missingParams.join(', ')}`,
+      detail: 'Google Consent Mode v2 specification defines: ad_storage, analytics_storage, ad_user_data, ad_personalization.'
     });
   } else {
-    passes.push('All 4 mandatory Consent Mode v2 parameters are present (ad_storage, analytics_storage, ad_user_data, ad_personalization)');
+    passes.push('All 4 v2 parameter strings present in text (ad_storage, analytics_storage, ad_user_data, ad_personalization)');
   }
 
-  // 3. Check for Race Conditions: Did consent default appear BEFORE GTM / gtag.js?
   const consentIndex = html.search(/gtag\s*\(\s*['"]consent['"]\s*,\s*['"]default['"]/i);
   const gtmIndex = html.search(/(googletagmanager\.com\/gtm\.js|googletagmanager\.com\/gtag\/js)/i);
 
   if (consentIndex !== -1 && gtmIndex !== -1) {
     if (gtmIndex < consentIndex) {
       issues.push({
-        code: 'ERR_RACE_CONDITION',
-        title: 'Race Condition Detected: Google Tag loads BEFORE consent default is set',
-        impact: 'HIGH: The Google Tag fires its initial collect ping before reading your default consent state, sending an uninitialized "gcd" parameter.',
-        fix: 'Move the consent default initialization snippet to the very top of <head>, strictly above any GTM or gtag.js script.'
+        code: 'WARN_SCRIPT_ORDER',
+        title: 'Static tag order: GTM script tag appears before consent default call in text',
+        detail: 'Google recommends executing gtag consent default synchronously before the GTM container script is requested.'
       });
     } else {
-      passes.push('Order verification passed: Consent default executes before Google Tag Manager container loads');
+      passes.push('Script order: Consent default appears before GTM script tag in text');
     }
   }
 
-  // 4. Check for wait_for_update
-  const hasWaitForUpdate = /['"]?wait_for_update['"]?\s*:\s*\d+/i.test(html);
-  if (hasWaitForUpdate) {
-    passes.push('wait_for_update parameter configured (allows asynchronous CMP resolution window)');
-  } else if (hasConsentDefault) {
-    warnings.push({
-      code: 'WARN_NO_WAIT_FOR_UPDATE',
-      title: 'wait_for_update is not set',
-      recommendation: 'Adding "wait_for_update: 500" gives the banner 500ms to resolve prior user consent without delaying critical tags.'
-    });
-  }
-
-  // 5. Check for re-consent / preferences trigger
-  const hasReconsentHook = /openConsentPreferences|cookie-settings|privacy-preferences/i.test(html);
-  if (hasReconsentHook) {
-    passes.push('Re-consent / preferences trigger detected');
-  } else {
-    warnings.push({
-      code: 'WARN_NO_RECONSENT_LINK',
-      title: 'No obvious re-consent trigger found in page source',
-      recommendation: 'Under GDPR/UK regulations, users must be able to change or withdraw their consent at any time via a link in the footer or settings.'
-    });
-  }
-
   return {
-    isCompliant: issues.length === 0,
+    isSyntaxValid: issues.length === 0,
     passes,
     issues,
     warnings
@@ -131,45 +100,33 @@ async function main() {
     const result = analyzeHtml(html);
 
     console.log('\n============================================================');
-    console.log('      ConsentModePro — Diagnostic Audit Report              ');
+    console.log('   Google Consent Mode v2 — Static Syntax Scanner           ');
     console.log('============================================================\n');
     console.log(`Audited Target: ${target}`);
-    console.log(`Status: ${result.isCompliant ? '✅ COMPLIANT' : '❌ NON-COMPLIANT / WARNINGS DETECTED'}\n`);
+    console.log(`Static Syntax Result: ${result.isSyntaxValid ? 'SYNTAX PASS (Text pattern check only)' : 'SYNTAX INCOMPLETE'}\n`);
+    console.log('NOTE: Static code analysis does NOT verify runtime browser execution,');
+    console.log('network collect pings (gcd parameter), or legal GDPR/ePrivacy compliance.\n');
 
     if (result.passes.length > 0) {
-      console.log('--- VERIFIED PASSES ---');
+      console.log('--- PATTERNS DETECTED ---');
       result.passes.forEach(p => console.log(`  [PASS] ${p}`));
       console.log('');
     }
 
     if (result.issues.length > 0) {
-      console.log('--- CRITICAL ISSUES TO FIX ---');
+      console.log('--- SYNTAX ISSUES / DISCREPANCIES ---');
       result.issues.forEach(iss => {
-        console.log(`  [FAIL] ${iss.title}`);
-        console.log(`         Impact: ${iss.impact}`);
-        console.log(`         Solution: ${iss.fix}\n`);
-      });
-    }
-
-    if (result.warnings.length > 0) {
-      console.log('--- OPTIMIZATION RECOMMENDATIONS ---');
-      result.warnings.forEach(w => {
-        console.log(`  [WARN] ${w.title}`);
-        console.log(`         Recommendation: ${w.recommendation}\n`);
+        console.log(`  [ISSUE] ${iss.title}`);
+        console.log(`          ${iss.detail}\n`);
       });
     }
 
     console.log('============================================================');
-    if (!result.isCompliant) {
-      console.log('Remediation: Deploy the ConsentModePro Zero-Bloat Guard to fix all issues in 3 minutes.');
-      console.log('Bundle: https://whop.com');
-    } else {
-      console.log('Your website meets core Google Consent Mode v2 technical requirements.');
-    }
+    console.log('Reference documentation: https://developers.google.com/tag-platform/security/guides/consent');
     console.log('============================================================\n');
 
   } catch (err) {
-    console.error('Audit failed:', err.message);
+    console.error('Scan failed:', err.message);
     process.exit(1);
   }
 }
