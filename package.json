@@ -1,0 +1,25 @@
+{
+  "name": "consent-mode-v2-guard",
+  "version": "2.1.0",
+  "description": "Google Consent Mode v2 synchronous guard, platform adapters, and diagnostic validator.",
+  "main": "consent-validator.mjs",
+  "type": "module",
+  "bin": {
+    "consent-mode-v2-validator": "./consent-validator.mjs"
+  },
+  "scripts": {
+    "audit": "node consent-validator.mjs"
+  },
+  "keywords": [
+    "consent-mode-v2",
+    "google-consent-mode",
+    "cmp",
+    "gtm",
+    "ga4",
+    "privacy",
+    "gdpr",
+    "shopify"
+  ],
+  "author": "Antigravity Autonomous Systems",
+  "license": "MIT"
+}
